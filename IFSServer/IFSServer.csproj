@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="DSharpPlus" Version="5.0.0-nightly-02016" />
+      <PackageReference Include="UltoLibraryNew" Version="1.0.0-x006" />
+      <PackageReference Include="UltoLibraryNew.Databases" Version="1.0.0-x019" />
+      <PackageReference Include="UltoLibraryNew.Network" Version="1.0.0-x009" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Shared\Shared.csproj" />
+    </ItemGroup>
+
+</Project>
