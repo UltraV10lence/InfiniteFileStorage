@@ -18,59 +18,107 @@ public class TcpReceiver {
             c.OnDisconnect += _ => Sessions.Remove(c);
 
             c.OnPacketReceive += p => {
-                if (p is Login login) {
-                    var acc = Program.GetAccount(login.Token);
-                    if (acc == null || Sessions.Values.Any(s => s.Token.SequenceEqual(login.Token))) {
-                        c.Disconnect(DisconnectReason.Disconnect);
-                        return;
-                    }
-                    Sessions.Add(c, new ClientSession(acc.UserToken));
-                    return;
-                }
-                
-                var session = Sessions[c];
-                var account = Program.GetAccount(session.Token)!;
-                switch (p) {
-                    case FileDataPart part:
-                        var used = account.UsedBytes + part.Data.Length;
-                        if (used > account.CapacityBytes) return;
-                        
-                        account.UsedBytes += part.Data.Length;
-                        AppendData(session, part.Data).Wait();
-                        return;
-                    case FileInfo info:
-                        if (session.LastUploaded == null || session.BufferIndex == 0) return;
-
-                        var counted = GetFileParts(session.LastUploaded.Value).GetAwaiter().GetResult();
-                        Program.FilesTable.Add(new ServerUserFile {
-                            UserToken = session.Token,
-                            Name = info.FileName,
-                            Size = counted,
-                            LastMessageId = session.LastUploaded.Value
-                        });
-
-                        Console.WriteLine($"Added new uploaded file entry. (\"{info.FileName}\", Id: {session.LastUploaded.Value}, Size: {counted})");
-                        break;
-                    case FilesListRequest:
-                        var token = session.Token;
-                        var files = Program.FilesTable.Entries
-                            .Where(f => f.UserToken.SequenceEqual(token)).ToArray();
-
-                        var response = new UserFile[files.Length];
-
-                        for (var i = 0; i < files.Length; i++) {
-                            response[i] = new UserFile {
-                                Name = files[i].Name,
-                                Id = files[i].FileId,
-                                Size = files[i].Size
-                            };
-                        }
-                        
-                        c.SendPacket(new FilesList(response));
-                        break;
+                try {
+                    PacketReceive(c, p);
+                } catch (Exception e) {
+                    Console.WriteLine(c.RemoteIp + ": " + e);
                 }
             };
         };
+    }
+
+    private void PacketReceive(NetConnection c, object p) {
+        if (p is Login login) {
+            var acc = Program.GetAccount(login.Token);
+            
+            if (acc == null) {
+                c.SendPacket(LoginResult.InvalidToken);
+                c.Disconnect(DisconnectReason.Disconnect);
+                return;
+            }
+
+            if (Sessions.Values.Any(s => s.Token.SequenceEqual(login.Token))) {
+                c.SendPacket(LoginResult.SessionAlive);
+                c.Disconnect(DisconnectReason.Disconnect);
+                return;
+            }
+            
+            Sessions.Add(c, new ClientSession(acc.UserToken));
+            c.SendPacket(LoginResult.Success);
+            return;
+        }
+        
+        var session = Sessions[c];
+        var account = Program.GetAccount(session.Token)!;
+        switch (p) {
+            case FileDataPart part:
+                if (account.CapacityBytes >= 0) {
+                    var used = account.UsedBytes + part.Data.Length;
+                    if (used > account.CapacityBytes) return;
+                }
+                
+                account.UsedBytes += part.Data.Length;
+                AppendData(session, part.Data).Wait();
+                return;
+            case FileInfo info:
+                if (session.LastUploaded == null || session.BufferIndex == 0) return;
+
+                var counted = GetFileParts(session.LastUploaded.Value).GetAwaiter().GetResult();
+                Program.FilesTable.Add(new ServerUserFile {
+                    UserToken = session.Token,
+                    Name = info.FileName,
+                    Size = counted,
+                    LastMessageId = session.LastUploaded.Value
+                });
+
+                Console.WriteLine($"Added new uploaded file entry. (\"{info.FileName}\", Id: {session.LastUploaded.Value}, Size: {counted})");
+                break;
+            case FilesListRequest:
+                var token = session.Token;
+                var files = Program.FilesTable.Entries
+                    .Where(f => f.UserToken.SequenceEqual(token)).ToArray();
+
+                var response = new UserFile[files.Length];
+
+                for (var i = 0; i < files.Length; i++) {
+                    response[i] = new UserFile {
+                        Name = files[i].Name,
+                        Id = files[i].FileId,
+                        Size = files[i].Size
+                    };
+                }
+                
+                c.SendPacket(new FilesList(response));
+                break;
+            case FileActionRequest request:
+                var file = Program.FilesTable.Entries
+                    .Find(f => f.FileId == request.FileId);
+
+                if (file == null || !file.UserToken.SequenceEqual(session.Token)) return;
+
+                var msg = Program.FilesChannel.GetMessageAsync(file.LastMessageId).GetAwaiter().GetResult();
+
+                switch (request.Action) {
+                    case FileAction.Delete:
+                        while (true) {
+                            msg.DeleteAsync();
+                            if (msg.Reference == null) break;
+                            msg = Program.FilesChannel.GetMessageAsync(msg.Reference.Message.Id).GetAwaiter().GetResult();
+                        }
+                        break;
+                    case FileAction.Read:
+                        while (true) {
+                            Console.WriteLine(msg.Attachments[0].Url + ", " + msg.Attachments[0].ProxyUrl);
+                            
+                            if (msg.Reference == null) break;
+                            msg = Program.FilesChannel.GetMessageAsync(msg.Reference.Message.Id).GetAwaiter().GetResult();
+                        }
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+                break;
+        }
     }
 
     public async Task AppendData(ClientSession session, byte[] data) {

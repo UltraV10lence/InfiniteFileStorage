@@ -15,7 +15,7 @@ internal static class Program {
     
     private static void Main() {
         Console.WriteLine("Loading bot...");
-        InitializeBot();
+        InitializeBot().Wait();
         Console.WriteLine("Bot loaded.");
         
         Console.WriteLine("Loading database...");
@@ -31,7 +31,7 @@ internal static class Program {
         Receiver.Run();
     }
 
-    private static void InitializeBot() {
+    private static async Task InitializeBot() {
         DiscordClient = new DiscordClient(new DiscordConfiguration {
             Token = DiscordBot.Token,
             TokenType = TokenType.Bot,
@@ -39,8 +39,8 @@ internal static class Program {
             MinimumLogLevel = LogLevel.None
         });
 
-        DiscordClient.ConnectAsync(status: UserStatus.DoNotDisturb).Wait();
-        Guild = DiscordClient.GetGuildAsync(DiscordBot.ServerId, true).GetAwaiter().GetResult(); // Подключается к серверу
+        await DiscordClient.ConnectAsync(status: UserStatus.DoNotDisturb);
+        Guild = await DiscordClient.GetGuildAsync(DiscordBot.ServerId, true); // Подключается к серверу
     }
 
     private static (Database db, bool isNew) InitializeDatabase() {
@@ -50,13 +50,13 @@ internal static class Program {
         db.CreateTable<Account>("accounts"); // Создаётся таблица с аккаунтами
         db.CreateTable<ServerUserFile>("files"); // Создаётся таблица с файлами
 
-        var acc = CreateAccount(db); // Создаётся аккаунт админа
+        var acc = CreateAdminAccount(db); // Создаётся аккаунт админа
         Console.WriteLine("Admin account token: " + UltoBytes.ToHexStr(acc.UserToken));
 
         return (db, true);
     }
 
-    public static Account CreateAccount(Database? db = null) {
+    public static Account CreateAdminAccount(Database? db = null) {
         db ??= Database;
         
         var token = UltoBytes.RandomSecure(32); // Создаётся токен аккаунта
@@ -77,7 +77,7 @@ internal static class Program {
         Console.WriteLine("Database saved.");
     }
     
-    public static DiscordChannel FilesChannel => Guild.GetChannel(1204172360169693244);
+    public static DiscordChannel FilesChannel => Guild.GetChannel(DiscordBot.ChannelId);
     public static DatabaseTable<Account> AccountsTable => Database.GetTable<Account>("accounts")!;
     public static DatabaseTable<ServerUserFile> FilesTable => Database.GetTable<ServerUserFile>("files")!;
 }

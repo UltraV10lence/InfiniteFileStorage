@@ -36,7 +36,7 @@ public class ServerConnection {
 
     public void UploadFile(string path) {
         var file = File.OpenRead(path);
-        var buffer = new byte[1024 * 1024];
+        var buffer = new byte[1024];
         int length;
         while ((length = file.Read(buffer)) > 0) {
             Client.SendPacket(new FileDataPart(buffer[..length]));
