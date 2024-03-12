@@ -1,6 +1,8 @@
-﻿namespace Shared.Clientbound;
+﻿using UltoLibraryNew.Network.Apps.Packets;
 
-public class FileActionRequest(long fileId, FileAction action) {
+namespace Shared.Clientbound;
+
+public class FileActionRequest(long fileId, FileAction action) : PacketNoEncryption {
     public readonly long FileId = fileId;
     public readonly FileAction Action = action;
 
@@ -10,5 +12,5 @@ public class FileActionRequest(long fileId, FileAction action) {
 
 public enum FileAction : byte {
     Delete,
-    Read
+    Download
 }

@@ -1,4 +1,4 @@
-﻿namespace Shared.Clientbound;
+﻿namespace Shared;
 
 public class FileDataPart(byte[] data) {
     public readonly byte[] Data = data;

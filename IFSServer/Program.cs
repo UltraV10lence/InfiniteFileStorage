@@ -52,6 +52,7 @@ internal static class Program {
 
         var acc = CreateAdminAccount(db); // Создаётся аккаунт админа
         Console.WriteLine("Admin account token: " + UltoBytes.ToHexStr(acc.UserToken));
+        File.WriteAllText("adminToken.txt", UltoBytes.ToHexStr(acc.UserToken));
 
         return (db, true);
     }
